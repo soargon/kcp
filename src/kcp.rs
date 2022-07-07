@@ -225,9 +225,6 @@ pub struct Kcp<Output: Write> {
     /// Enable stream mode
     stream: bool,
 
-    /// Get conv from the next input call
-    input_conv: bool,
-
     output: KcpOutput<Output>,
 }
 
@@ -286,7 +283,6 @@ impl<Output: Write> Kcp<Output> {
             interval: KCP_INTERVAL,
             ts_flush: KCP_INTERVAL,
             ssthresh: KCP_THRESH_INIT,
-            input_conv: false,
             output: KcpOutput(output),
         }
     }
@@ -544,18 +540,6 @@ impl<Output: Write> Kcp<Output> {
         self.move_buf();
     }
 
-    /// Get `conv` from the next `input` call
-    #[inline]
-    pub fn input_conv(&mut self) {
-        self.input_conv = true;
-    }
-
-    /// Check if Kcp is waiting for the next input
-    #[inline]
-    pub fn waiting_conv(&self) -> bool {
-        self.input_conv
-    }
-
     /// Set `conv` value
     #[inline]
     pub fn set_conv(&mut self, conv: u32) {
@@ -591,16 +575,8 @@ impl<Output: Write> Kcp<Output> {
         while buf.remaining() >= KCP_OVERHEAD as usize {
             let conv = buf.get_u32_le();
             if conv != self.conv {
-                // This allows getting conv from this call, which allows us to allocate
-                // conv from the server side.
-                if self.input_conv {
-                    debug!("input conv={} updated, original conv={}", conv, self.conv);
-                    self.conv = conv;
-                    self.input_conv = false;
-                } else {
-                    debug!("input conv={} expected conv={} not match", conv, self.conv);
-                    return Err(Error::ConvInconsistent(self.conv, conv));
-                }
+                debug!("input conv={} expected conv={} not match", conv, self.conv);
+                return Err(Error::ConvInconsistent(self.conv, conv));
             }
 
             let cmd = buf.get_u8();
