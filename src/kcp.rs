@@ -380,8 +380,6 @@ impl<Output: Write> Kcp<Output> {
     pub fn send(&mut self, mut buf: &[u8]) -> KcpResult<usize> {
         let mut sent_size = 0;
 
-        assert!(self.mss > 0);
-
         // append to previous segment in streaming mode (if possible)
         if self.stream {
             if let Some(old) = self.snd_queue.back_mut() {
@@ -421,9 +419,6 @@ impl<Output: Write> Kcp<Output> {
             debug!("send bufsize={} mss={} too large", buf.len(), self.mss);
             return Err(Error::UserBufTooBig);
         }
-        assert!(count > 0);
-
-        // let count = cmp::max(1, count);
 
         for i in 0..count {
             let size = cmp::min(self.mss as usize, buf.len());
