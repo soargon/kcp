@@ -515,10 +515,6 @@ impl<Output: Write> Kcp<Output> {
     fn parse_data(&mut self, new_segment: KcpSegment) {
         let sn = new_segment.sn;
 
-        if timediff(sn, self.rcv_nxt + self.rcv_wnd as u32) >= 0 || timediff(sn, self.rcv_nxt) < 0 {
-            return;
-        }
-
         let mut repeat = false;
         let mut new_index = self.rcv_buf.len();
 
