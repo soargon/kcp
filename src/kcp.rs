@@ -63,7 +63,7 @@ fn bound(lower: u32, v: u32, upper: u32) -> u32 {
 
 #[inline]
 fn timediff(later: u32, earlier: u32) -> i32 {
-    later as i32 - earlier as i32
+    (later - earlier) as i32
 }
 
 #[derive(Default, Clone, Debug)]
@@ -466,7 +466,7 @@ impl<Output: Write> Kcp<Output> {
     }
 
     fn parse_ack(&mut self, sn: u32) {
-        if timediff(sn, self.snd_una) < 0 || timediff(sn, self.snd_nxt) >= 0 {
+        if sn < self.snd_una || sn >= self.snd_nxt {
             return;
         }
 
@@ -484,7 +484,7 @@ impl<Output: Write> Kcp<Output> {
 
     fn parse_una(&mut self, una: u32) {
         while !self.snd_buf.is_empty() {
-            if timediff(una, self.snd_buf[0].sn) > 0 {
+            if una > self.snd_buf[0].sn {
                 // self.snd_buf.remove(0);
                 self.snd_buf.pop_front();
             } else {
@@ -494,12 +494,12 @@ impl<Output: Write> Kcp<Output> {
     }
 
     fn parse_fastack(&mut self, sn: u32) {
-        if timediff(sn, self.snd_una) < 0 || timediff(sn, self.snd_nxt) >= 0 {
+        if sn < self.snd_una || sn >= self.snd_nxt {
             return;
         }
 
         for seg in &mut self.snd_buf {
-            if timediff(sn, seg.sn) < 0 {
+            if sn < seg.sn {
                 break;
             } else if sn != seg.sn {
                 seg.fastack += 1;
@@ -518,11 +518,11 @@ impl<Output: Write> Kcp<Output> {
         let mut repeat = false;
         let mut new_index = self.rcv_buf.len();
 
-        for segment in self.rcv_buf.iter().rev() {
-            if segment.sn == sn {
+        for seg in self.rcv_buf.iter().rev() {
+            if seg.sn == sn {
                 repeat = true;
                 break;
-            } else if timediff(sn, segment.sn) > 0 {
+            } else if sn > seg.sn {
                 break;
             }
             new_index -= 1;
@@ -620,23 +620,23 @@ impl<Output: Write> Kcp<Output> {
                     if !flag {
                         max_ack = sn;
                         flag = true;
-                    } else if timediff(sn, max_ack) > 0 {
+                    } else if sn > max_ack {
                         max_ack = sn;
                     }
 
                     trace!(
                         "input ack: sn={} rtt={} rto={}",
                         sn,
-                        timediff(self.current, ts),
+                        rtt,
                         self.rx_rto
                     );
                 }
                 KCP_CMD_PUSH => {
                     trace!("input psh: sn={} ts={}", sn, ts);
 
-                    if timediff(sn, self.rcv_nxt + self.rcv_wnd as u32) < 0 {
+                    if sn < self.rcv_nxt + self.rcv_wnd as u32 {
                         self.ack_push(sn, ts);
-                        if timediff(sn, self.rcv_nxt) >= 0 {
+                        if sn >= self.rcv_nxt {
                             let mut sbuf = BytesMut::with_capacity(len as usize);
                             unsafe {
                                 sbuf.set_len(len as usize);
@@ -735,7 +735,7 @@ impl<Output: Write> Kcp<Output> {
                 self.probe_wait = KCP_PROBE_INIT;
                 self.ts_probe = self.current + self.probe_wait;
             } else {
-                if timediff(self.current, self.ts_probe) >= 0 && self.probe_wait < KCP_PROBE_INIT {
+                if self.current >= self.ts_probe && self.probe_wait < KCP_PROBE_INIT {
                     self.probe_wait = KCP_PROBE_INIT;
                 }
                 self.probe_wait += self.probe_wait / 2;
@@ -821,7 +821,7 @@ impl<Output: Write> Kcp<Output> {
         }
 
         // move data from snd_queue to snd_buf
-        while timediff(self.snd_nxt, self.snd_una + cwnd as u32) < 0 {
+        while self.snd_nxt < self.snd_una + cwnd as u32 {
             match self.snd_queue.pop_front() {
                 Some(mut new_segment) => {
                     new_segment.conv = self.conv;
@@ -861,7 +861,7 @@ impl<Output: Write> Kcp<Output> {
                 snd_segment.xmit += 1;
                 snd_segment.rto = self.rx_rto;
                 snd_segment.resendts = self.current + snd_segment.rto + rtomin;
-            } else if timediff(self.current, snd_segment.resendts) >= 0 {
+            } else if self.current >= snd_segment.resendts {
                 need_send = true;
                 snd_segment.xmit += 1;
                 self.xmit += 1;
@@ -954,7 +954,7 @@ impl<Output: Write> Kcp<Output> {
 
         if slap >= 0 {
             self.ts_flush += self.interval;
-            if timediff(self.current, self.ts_flush) >= 0 {
+            if self.current >= self.ts_flush {
                 self.ts_flush = self.current + self.interval;
             }
             self.flush()?;
@@ -978,7 +978,7 @@ impl<Output: Write> Kcp<Output> {
             ts_flush = current;
         }
 
-        if timediff(current, ts_flush) >= 0 {
+        if current >= ts_flush {
             // return self.interval;
             return 0;
         }
