@@ -3,7 +3,7 @@
 use std::cmp;
 use std::cmp::Ordering;
 use std::collections::VecDeque;
-use std::io::{self, Cursor, Read, Write};
+use std::io::{Cursor, Read, Write};
 
 use bytes::{Buf, BufMut, BytesMut};
 use error::Error;
@@ -126,24 +126,8 @@ impl KcpSegment {
     }
 }
 
-#[derive(Default)]
-struct KcpOutput<O: Write>(O);
-
-impl<O: Write> Write for KcpOutput<O> {
-    #[inline]
-    fn write(&mut self, data: &[u8]) -> io::Result<usize> {
-        trace!("[RO] {} bytes", data.len());
-        self.0.write(data)
-    }
-
-    #[inline]
-    fn flush(&mut self) -> io::Result<()> {
-        self.0.flush()
-    }
-}
 
 /// KCP control
-#[derive(Default)]
 pub struct Kcp<Output: Write> {
     /// Conversation ID
     conv: u32,
@@ -216,7 +200,7 @@ pub struct Kcp<Output: Write> {
 
     /// Pending ACK
     acklist: VecDeque<(u32, u32)>,
-    buf: BytesMut,
+    buf: BytesMut, // TODO optimize with SmallVec and IoSlice, maybe can move to KcpOutput
 
     /// ACK number to trigger fast resend
     fastresend: u32,
@@ -225,7 +209,7 @@ pub struct Kcp<Output: Write> {
     /// Enable stream mode
     stream: bool,
 
-    output: KcpOutput<Output>,
+    output: Output,
 }
 
 impl<Output: Write> Kcp<Output> {
@@ -283,7 +267,7 @@ impl<Output: Write> Kcp<Output> {
             interval: KCP_INTERVAL,
             ts_flush: KCP_INTERVAL,
             ssthresh: KCP_THRESH_INIT,
-            output: KcpOutput(output),
+            output,
         }
     }
 
