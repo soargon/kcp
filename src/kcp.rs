@@ -63,7 +63,7 @@ fn bound(lower: u32, v: u32, upper: u32) -> u32 {
 
 #[inline]
 fn timediff(later: u32, earlier: u32) -> i32 {
-    (later - earlier) as i32
+    (later as i64 - earlier as i64) as i32
 }
 
 #[derive(Default, Clone, Debug)]
