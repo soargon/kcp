@@ -1008,13 +1008,12 @@ impl<Output: Write> Kcp<Output> {
     }
 
     /// Set check interval
-    pub fn set_interval(&mut self, mut interval: u32) {
-        if interval > 5000 {
-            interval = 5000;
-        } else if interval < 10 {
-            interval = 10;
+    pub fn set_interval(&mut self, interval: u32) {
+        match interval {
+            interval if interval < 10 => self.interval = 10,
+            interval if interval > 5000 => self.interval = 5000,
+            _ => self.interval = interval as u32,
         }
-        self.interval = interval;
     }
 
     /// Set nodelay
@@ -1025,7 +1024,7 @@ impl<Output: Write> Kcp<Output> {
     /// `interval`: internal update timer interval in millisec, default is 100ms
     /// `resend`: 0:disable fast resend(default), 1:enable fast resend
     /// `nc`: `false`: normal congestion control(default), `true`: disable congestion control
-    pub fn set_nodelay(&mut self, nodelay: bool, interval: i32, resend: i32, nc: bool) {
+    pub fn set_nodelay(&mut self, nodelay: bool, interval: u32, resend: u32, nc: bool) {
         if nodelay {
             self.nodelay = true;
             self.rx_minrto = KCP_RTO_NDL;
@@ -1034,15 +1033,9 @@ impl<Output: Write> Kcp<Output> {
             self.rx_minrto = KCP_RTO_MIN;
         }
 
-        match interval {
-            interval if interval < 10 => self.interval = 10,
-            interval if interval > 5000 => self.interval = 5000,
-            _ => self.interval = interval as u32,
-        }
+        self.set_interval(interval);
 
-        if resend >= 0 {
-            self.fastresend = resend as u32;
-        }
+        self.fastresend = resend;
 
         self.nocwnd = nc;
     }
