@@ -299,7 +299,7 @@ impl<Output: Write> Kcp<Output> {
     }
 
     // move available data from rcv_buf -> rcv_queue
-    pub fn move_buf(&mut self) {
+    fn move_rcv_buf(&mut self) {
         while !self.rcv_buf.is_empty() {
             let nrcv_que = self.rcv_queue.len();
             {
@@ -344,7 +344,7 @@ impl<Output: Write> Kcp<Output> {
         }
         assert_eq!(cur.position() as usize, peeksize);
 
-        self.move_buf();
+        self.move_rcv_buf();
 
         // fast recover
         if self.rcv_queue.len() < self.rcv_wnd as usize && recover {
@@ -442,7 +442,7 @@ impl<Output: Write> Kcp<Output> {
     }
 
     #[inline]
-    fn shrink_buf(&mut self) {
+    fn shrink_snd_buf(&mut self) {
         self.snd_una = match self.snd_buf.front() {
             Some(seg) => seg.sn,
             None => self.snd_nxt,
@@ -517,7 +517,7 @@ impl<Output: Write> Kcp<Output> {
         }
 
         // move available data from rcv_buf -> rcv_queue
-        self.move_buf();
+        self.move_rcv_buf();
     }
 
     /// Set `conv` value
@@ -588,7 +588,7 @@ impl<Output: Write> Kcp<Output> {
             self.rmt_wnd = wnd;
 
             self.parse_una(una);
-            self.shrink_buf();
+            self.shrink_snd_buf();
 
             let mut has_read_data = false;
 
@@ -599,7 +599,7 @@ impl<Output: Write> Kcp<Output> {
                         self.update_ack(rtt as u32);
                     }
                     self.parse_ack(sn);
-                    self.shrink_buf();
+                    self.shrink_snd_buf();
 
                     if !flag {
                         max_ack = sn;
