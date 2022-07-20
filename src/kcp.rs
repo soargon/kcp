@@ -26,11 +26,12 @@ const KCP_WND_SND: u16 = 32;
 const KCP_WND_RCV: u16 = 128;
 
 const KCP_MTU_DEF: usize = 1400;
-// const KCP_ACK_FAST: u32 = 3;
 
 const KCP_INTERVAL: u32 = 100;
 const KCP_OVERHEAD: usize = 24;
-// const KCP_DEADLINK: u32 = 20;
+
+const KCP_DEADLINK: u32 = 10;
+const KCP_FASTACK_LIMIT: u32 = 5;		// max times to trigger fastack
 
 const KCP_THRESH_INIT: u16 = 2;
 const KCP_THRESH_MIN: u16 = 2;
@@ -204,6 +205,7 @@ pub struct Kcp<Output: Write> {
 
     /// ACK number to trigger fast resend
     fastresend: u32,
+    fast_limit: u32,
     /// Disable congetion control
     nocwnd: bool,
     /// Enable stream mode
@@ -246,9 +248,10 @@ impl<Output: Write> Kcp<Output> {
             updated: false,
             ts_probe: 0,
             probe_wait: 0,
-            dead_link: 10,
+            dead_link: KCP_DEADLINK,
             incr: 0,
             fastresend: 0,
+            fast_limit: KCP_FASTACK_LIMIT,
             nocwnd: false,
             stream,
             snd_wnd: KCP_WND_SND,
@@ -856,7 +859,9 @@ impl<Output: Write> Kcp<Output> {
                 }
                 snd_segment.resendts = self.current + snd_segment.rto;
                 lost = true;
-            } else if snd_segment.fastack >= resent {
+            } else if snd_segment.fastack >= resent
+                && (self.fast_limit <= 0 || snd_segment.xmit <= self.fast_limit)
+            {
                 need_send = true;
                 snd_segment.xmit += 1;
                 snd_segment.fastack = 0;
@@ -1094,6 +1099,7 @@ impl<Output: Write> Kcp<Output> {
 
     /// Set maximum resend times
     pub fn set_maximum_resend_times(&mut self, dead_link: u32) {
+        assert!(dead_link >= self.fast_limit);
         self.dead_link = dead_link;
     }
 
