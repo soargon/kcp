@@ -1087,7 +1087,7 @@ impl<Output: Write> Kcp<Output> {
     }
 
     /// KCP header size
-    pub fn header_len() -> usize {
+    pub const fn header_len() -> usize {
         KCP_OVERHEAD as usize
     }
 
