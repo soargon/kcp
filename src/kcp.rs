@@ -480,7 +480,7 @@ impl<Output: Write> Kcp<Output> {
         }
     }
 
-    fn parse_fastack(&mut self, sn: u32) {
+    fn parse_fastack(&mut self, sn: u32, ts: u32) {
         if sn < self.snd_una || sn >= self.snd_nxt {
             return;
         }
@@ -488,7 +488,8 @@ impl<Output: Write> Kcp<Output> {
         for seg in &mut self.snd_buf {
             if sn < seg.sn {
                 break;
-            } else if sn != seg.sn {
+            } else if sn != seg.sn
+                && timediff(ts, seg.ts) >= 0 {
                 seg.fastack += 1;
             }
         }
@@ -552,6 +553,7 @@ impl<Output: Write> Kcp<Output> {
 
         let mut flag = false;
         let mut max_ack = 0;
+        let mut latest_ts = 0;
         let old_una = self.snd_una;
 
         let mut buf = Cursor::new(buf);
@@ -606,9 +608,12 @@ impl<Output: Write> Kcp<Output> {
 
                     if !flag {
                         max_ack = sn;
+                        latest_ts = ts;
                         flag = true;
-                    } else if sn > max_ack {
+                    } else if sn > max_ack
+                        && timediff(ts, latest_ts) > 0 {
                         max_ack = sn;
+                        latest_ts = ts;
                     }
 
                     trace!(
@@ -664,7 +669,7 @@ impl<Output: Write> Kcp<Output> {
         }
 
         if flag {
-            self.parse_fastack(max_ack);
+            self.parse_fastack(max_ack, latest_ts);
         }
 
         if self.snd_una > old_una && self.cwnd < self.rmt_wnd {
