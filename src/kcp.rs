@@ -962,34 +962,33 @@ impl<Output: Write> Kcp<Output> {
     /// You can call `update` in that time without calling it repeatly.
     pub fn check(&self, current: u32) -> u32 {
         if !self.updated {
-            return 0;
+            return current;
         }
 
         let mut ts_flush = self.ts_flush;
         let mut tm_packet = u32::max_value();
 
-        if timediff(current, ts_flush) >= 10000 || timediff(current, ts_flush) < -10000 {
+        if timediff(current, ts_flush) >= 10000
+            || timediff(current, ts_flush) < -10000 {
             ts_flush = current;
         }
 
-        if current >= ts_flush {
-            // return self.interval;
-            return 0;
+        if timediff(current, ts_flush) >= 0 {
+            return current;
         }
 
         let tm_flush = timediff(ts_flush, current) as u32;
         for seg in &self.snd_buf {
             let diff = timediff(seg.resendts, current);
             if diff <= 0 {
-                // return self.interval;
-                return 0;
+                return current;
             }
             if (diff as u32) < tm_packet {
                 tm_packet = diff as u32;
             }
         }
 
-        cmp::min(cmp::min(tm_packet, tm_flush), self.interval)
+        current + cmp::min(cmp::min(tm_packet, tm_flush), self.interval)
     }
 
     /// Change MTU size, default is 1400
