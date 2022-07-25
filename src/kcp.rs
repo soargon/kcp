@@ -424,7 +424,7 @@ impl<Output: Write> Kcp<Output> {
         Ok(sent_size)
     }
 
-    fn update_ack(&mut self, rtt: u32) {
+    fn update_rto(&mut self, rtt: u32) {
         if self.rx_srtt == 0 {
             self.rx_srtt = rtt;
             self.rx_rttval = rtt / 2;
@@ -601,7 +601,7 @@ impl<Output: Write> Kcp<Output> {
                 KCP_CMD_ACK => {
                     let rtt = timediff(self.current, ts);
                     if rtt >= 0 {
-                        self.update_ack(rtt as u32);
+                        self.update_rto(rtt as u32);
                     }
                     self.parse_ack(sn);
                     self.shrink_snd_buf();
@@ -720,7 +720,7 @@ impl<Output: Write> Kcp<Output> {
         Ok(())
     }
 
-    fn probe_wnd_size(&mut self) {
+    fn calc_probe_wnd_size(&mut self) {
         // probe window size (if remote window size equals zero)
         if self.rmt_wnd == 0 {
             if self.probe_wait == 0 {
@@ -801,10 +801,8 @@ impl<Output: Write> Kcp<Output> {
         };
 
         self._flush_ack(&mut segment)?;
-        self.probe_wnd_size();
+        self.calc_probe_wnd_size();
         self.flush_probe_commands(&mut segment)?;
-
-        // println!("SNDBUF size {}", self.snd_buf.len());
 
         // calculate window size
         let mut cwnd = cmp::min(self.snd_wnd, self.rmt_wnd);
